@@ -37,33 +37,57 @@
   function choose(id){selected=id;if(root.erpCurves&&ERP25Curves.units.some(([unit])=>unit===id))root.erpCurves.select(id);f('component').value=id;plant.select(id);const part=plant.parts[id],kind=id.startsWith('PIT')?id:id.split('-')[0];f('detail').textContent=part.name.replace(/ · (?:plano |la instalación )?#.*$/,'');f('technical-detail').textContent=part.description||descriptions[kind]||'';renderLabels();}
   function project(point){return point.clone().project(camera);}
   const openingText=(k,kind)=>{const st=trainer.state(k);return !trainer.model.branches[k].enabled||!st.ssv?'N/C':fmt(100*st[kind],1)+' %';};
+  const labelBounds=new Map();
   function renderLabels(){
     const rect=f('stage').getBoundingClientRect(),w=rect.width,h=rect.height;if(!w)return;
     const labels=[
-      {id:'total-in',priority:-6,text:'ENT '+fmt(trainer.model.cfg.pin,1)+' bar',point:new THREE.Vector3(-6.3,ERP25Layout.y+.45,0)},
-      {id:'total-out',priority:-6,text:'SAL '+fmt(trainer.model.p,2)+' bar · '+fmt(trainer.model.qd,0)+' Nm³/h',point:new THREE.Vector3(6.3,ERP25Layout.y+.45,0)}];
+      {id:'total-in',priority:-6,title:'ENTRADA',value:fmt(trainer.model.cfg.pin,1)+' bar',point:new THREE.Vector3(-6.3,ERP25Layout.y,0)},
+      {id:'total-out',priority:-6,title:'SALIDA',value:fmt(trainer.model.p,2)+' bar · '+fmt(trainer.model.qd,0)+' Nm³/h',point:new THREE.Vector3(6.3,ERP25Layout.y,0)}];
     const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;');
     f('branch-readings').innerHTML=['A','C','B'].map(k=>{const st=trainer.state(k),name=k==='A'?'R1 · principal':k==='C'?'R2 · reserva':'AR · arranque';return `<div class="erp-reading"><strong>${name}</strong><span><b>${fmt(trainer.model.p)}</b> bar(g) · <b>${fmt(st.q,1)}</b> Nm³/h</span><small>${k==='B'?'Estado: '+openingText(k,'active'):'M '+openingText(k,'monitor')+' · A '+openingText(k,'active')}</small></div>`;}).join('');
     const faultText=f('header-readings').dataset.faultText||'Sin fallas activas';
     f('header-readings').innerHTML=`<div><small>ENTRADA TOTAL</small><b>${fmt(trainer.model.cfg.pin)} <small>bar(g)</small></b><span>${fmt(trainer.model.qin,1)} Nm³/h</span></div><div><small>SALIDA A RED</small><b>${fmt(trainer.model.p)} <small>bar(g)</small></b><span>${fmt(trainer.model.qd,1)} Nm³/h</span></div><div><small>ALIVIO</small><b>${fmt(trainer.model.qr,1)} <small>Nm³/h</small></b><span>R1 ${fmt(trainer.model.branches.A.relief.q,0)} · R2 ${fmt(trainer.model.branches.C.relief.q,0)} · AR ${fmt(trainer.model.branches.B.relief.q,0)}</span></div><div class="erp-kpi-state"><small>ESTADO GENERAL</small><b>${f('header-readings').dataset.faults>0?'Atención':'Normal'}</b><span title="${esc(faultText)}">${esc(faultText)}</span></div>`;
-    for(const k of ['A','C','B']){const L=ERP25Layout.branches[k],st=trainer.state(k),name=k==='A'?'R1':k==='C'?'R2':'AR';
-      labels.push({id:'opening-'+k,priority:-4,text:k==='B'?'AR · '+openingText(k,'active'):name+' · M '+openingText(k,'monitor')+' · A '+openingText(k,'active'),point:new THREE.Vector3(k==='B'?L.active:(L.monitor+L.active)/2,ERP25Layout.y+1,L.z)});
+    for(const k of ['A','C','B']){const L=ERP25Layout.branches[k],name=k==='A'?'R1':k==='C'?'R2':'Arranque';
+      for(const kind of k==='B'?['active']:['monitor','active']){
+        const id=kind+'-'+k,failmode=kind==='active'&&k!=='B'?'FO':'FC';
+        labels.push({id,priority:-4,title:name+' · '+(kind==='monitor'?'Monitor':k==='B'?'Regulador':'Activo'),value:openingText(k,kind)+' · '+failmode,point:plant.parts[id].group.position.clone().add(new THREE.Vector3(0,.55,0))});
+      }
     }
-    for(const k of ['A','C','B']){const L=ERP25Layout.branches[k];for(const kind of k==='B'?['active']:['monitor','active'])labels.push({id:'failmode-'+kind+'-'+k,priority:-3,text:kind==='active'&&k!=='B'?'FO':'FC',point:new THREE.Vector3(L[kind],ERP25Layout.y-.45,L.z)});}
-    if(trainer.model.qev.active||trainer.model.qev.acted)labels.push({id:'qev-state',priority:-5,text:trainer.model.qev.active?'QEV · descarga cámara':'QEV · actuó',point:new THREE.Vector3(ERP25Layout.branches.A.monitor,ERP25Layout.y+1.65,ERP25Layout.branches.A.z)});
+    if(trainer.model.qev.active||trainer.model.qev.acted)labels.push({id:'qev-A',priority:-5,title:'R1 · QEV',value:trainer.model.qev.active?'Descarga cámara':'Actuó',point:plant.parts['qev-A'].group.position.clone()});
     if(!labelsVisible){f('labels').innerHTML='';return;}
-    const placed=[],out=[];
-    labels.sort((x,y)=>x.priority-y.priority);
-    for(const label of labels){const p=project(label.point);if(p.z>1||p.z< -1)continue;const px=(p.x+1)*w/2,py=(-p.y+1)*h/2;
-      if(px< -30||px>w+30||py< -30||py>h+30)continue;
-      const tw=Math.min(w-16,label.text.length*6.6+8),x=Math.max(8+tw/2,Math.min(w-8-tw/2,px));let y=Math.max(20,Math.min(h-12,py));
-      let fits=false;for(const dy of [0,-24,24,-48,48,-72,72,-96,96,-120,120]){const yy=Math.max(20,Math.min(h-12,y+dy));const box={x:x-tw/2,y:yy-13,w:tw,h:17};if(!placed.some(b=>box.x<b.x+b.w+4&&box.x+box.w+4>b.x&&box.y<b.y+b.h+4&&box.y+box.h+4>b.y)){y=yy;placed.push(box);fits=true;break;}}
-      if(!fits)continue;
-      if(label.id?.startsWith('opening-')||Math.abs(y-py)>12||Math.abs(x-px)>15)out.push(`<path d="M ${px.toFixed(1)} ${py.toFixed(1)} L ${x.toFixed(1)} ${(y-7).toFixed(1)}" fill="none" stroke="var(--border)"/>`);
-      if(label.id?.startsWith('opening-')||label.id?.startsWith('total-'))out.push(`<rect x="${(x-tw/2-4).toFixed(1)}" y="${(y-15).toFixed(1)}" width="${(tw+8).toFixed(1)}" height="20" rx="8" fill="#142a3e" stroke="var(--border)"/>`);
-      out.push(`<text ${label.id?.startsWith('failmode-')?'data-failmode="'+label.id+'" style="font-size:10px;font-weight:600"':''} x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${label.text.replaceAll('&','&amp;').replaceAll('<','&lt;')}</text>`);
+    const placed=[],cards=[],guides=[],leaders=[],obstacles=[],tw=Math.min(146,w-16),th=34,gap=6;
+    const overlap=(a,b,pad=0)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w+pad)-Math.max(a.x,b.x-pad))*Math.max(0,Math.min(a.y+a.h,b.y+b.h+pad)-Math.max(a.y,b.y-pad));
+    const lineHits=(a,b,box)=>{let lo=0,hi=1;for(const [axis,size] of [['x','w'],['y','h']]){const d=b[axis]-a[axis];if(Math.abs(d)<.001){if(a[axis]<box[axis]||a[axis]>box[axis]+box[size])return false;}else{let x=(box[axis]-a[axis])/d,y=(box[axis]+box[size]-a[axis])/d;if(x>y)[x,y]=[y,x];lo=Math.max(lo,x);hi=Math.min(hi,y);if(lo>hi)return false;}}return hi>0&&lo<1;};
+    plant.scene.updateMatrixWorld(true);
+    // Project fixed equipment envelopes; neither the equipment nor the camera is moved.
+    for(const [id,part] of Object.entries(plant.parts)){
+      if(!/^(filter|monitor|active|ssv|in|out|gauge|relief|qev)-[ABC]$/.test(id))continue;
+      if(!labelBounds.has(id)){const box=new THREE.Box3().setFromObject(part.group);if(id.startsWith('relief-'))box.max.y=part.group.position.y+.65;labelBounds.set(id,box);}
+      const box=labelBounds.get(id),points=[];
+      for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=project(new THREE.Vector3(x,y,z));if(p.z>=-1&&p.z<=1)points.push({x:(p.x+1)*w/2,y:(1-p.y)*h/2});}
+      if(!points.length)continue;const xs=points.map(p=>p.x),ys=points.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys);obstacles.push({x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y});
     }
-    f('labels').setAttribute('viewBox',`0 0 ${w} ${h}`);f('labels').innerHTML=out.join('');
+    labels.sort((x,y)=>x.priority-y.priority);
+    const centreY=(1-project(new THREE.Vector3(0,ERP25Layout.y+.55,0)).y)*h/2;
+    for(const label of labels){const p=project(label.point);if(p.z>1||p.z< -1)continue;const px=(p.x+1)*w/2,py=(1-p.y)*h/2;
+      if(px< -30||px>w+30||py< -30||py>h+30)continue;
+      let best=null,bestScore=Infinity;
+      const consider=(dx,dy)=>{const box={x:Math.max(8,Math.min(w-tw-8,px+dx-tw/2)),y:Math.max(8,Math.min(h-th-8,py+dy-th/2)),w:tw,h:th};
+        if(placed.some(b=>overlap(box,b,gap)>0))return;
+        const cx=box.x+tw/2,cy=box.y+th/2,covered=obstacles.reduce((sum,b)=>sum+overlap(box,b,3),0),distance=Math.hypot(cx-px,cy-py);
+        const end={x:Math.max(box.x+6,Math.min(box.x+tw-6,px)),y:py<box.y?box.y:py>box.y+th?box.y+th:py},crossings=placed.filter(b=>lineHits({x:px,y:py},end,b)).length+leaders.filter(l=>lineHits(l.a,l.b,box)).length;
+        const side=/^(active|monitor)-/.test(label.id)&&((cy-py)*(py<centreY?-1:1)<0)?400:0;
+        const score=covered*12+crossings*5000+distance+side;if(score<bestScore){best=box;bestScore=score;}
+      };
+      for(const dy of [-44,44,-84,84,-124,124,-164,164,-204,204])for(const dx of [0,-48,48,-96,96,-148,148,-200,200])consider(dx,dy);
+      if(!best)for(let y=8;y<h-th;y+=20)for(let x=8;x<w-tw;x+=28)consider(x+tw/2-px,y+th/2-py);
+      if(!best)continue;
+      placed.push(best);const x=best.x+tw/2,y=best.y,ex=Math.max(best.x+6,Math.min(best.x+tw-6,px)),ey=py<y?y:py>y+th?y+th:Math.max(y+5,Math.min(y+th-5,py));
+      guides.push(`<path d="M ${px.toFixed(1)} ${py.toFixed(1)} L ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" style="stroke:#54758c;stroke-width:.7;opacity:.65"/>`);
+      leaders.push({a:{x:px,y:py},b:{x:ex,y:ey}});
+      cards.push(`<g data-equipment-label="${label.id}" data-anchor-x="${px.toFixed(1)}" data-anchor-y="${py.toFixed(1)}"><rect x="${best.x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw}" height="${th}" rx="7" fill="#142f40" fill-opacity="0.8"/><text x="${x.toFixed(1)}" y="${(y+13).toFixed(1)}" text-anchor="middle" style="fill:#fff!important;font-size:10.5px;font-weight:600;stroke:none">${esc(label.title)}<tspan x="${x.toFixed(1)}" dy="14" style="font-weight:500">${esc(label.value)}</tspan></text></g>`);
+    }
+    f('labels').setAttribute('viewBox',`0 0 ${w} ${h}`);f('labels').innerHTML=guides.join('')+cards.join('');
   }
   a('equipment-summary').addEventListener('click',()=>{f('workspace').dataset.expanded='false';a('expand').textContent='Ampliar paneles';a('expand').setAttribute('aria-pressed','false');f('equipment-summary').open=true;f('equipment-summary').scrollIntoView({behavior:'smooth',block:'start'});});
   function narrative(){const m=trainer.model;

@@ -10,8 +10,13 @@
       scene.updateMatrixWorld(true);camera.updateMatrixWorld();
       const projection=new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse),faces=this.faces;faces.length=0;
       const light=new THREE.Vector3(.3,.8,.5).normalize();
+      // Match the WebGL arrow pass: full contrast through translucent pipe walls,
+      // while solid equipment (and opaque pipes when x-ray is off) still occludes it.
+      const arrowOccluders=[],arrowRay=new THREE.Raycaster(),cameraPosition=camera.getWorldPosition(new THREE.Vector3());
+      scene.traverse(o=>{if(!o.isMesh||!o.visible||o.material.transparent)return;let p=o.parent;while(p){if(!p.visible)return;p=p.parent;}arrowOccluders.push(o);});
       scene.traverse(mesh=>{
         if(!mesh.isMesh||!mesh.visible)return;let parent=mesh.parent;while(parent){if(!parent.visible)return;parent=parent.parent;}
+        if(mesh.userData.gasArrow){const position=mesh.getWorldPosition(new THREE.Vector3()),direction=position.sub(cameraPosition),distance=direction.length();arrowRay.set(cameraPosition,direction.normalize());arrowRay.far=Math.max(0,distance-.002);if(arrowRay.intersectObjects(arrowOccluders,false).some(hit=>!hit.object.material.clippingPlanes?.some(p=>p.distanceToPoint(hit.point)<0)))return;}
         const geometry=mesh.geometry,attr=geometry.attributes.position;if(!attr)return;
         const mvp=new THREE.Matrix4().multiplyMatrices(projection,mesh.matrixWorld),normalMatrix=new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
         let cached=this.meshCache.get(mesh);if(!cached||cached.geometry!==geometry){cached={geometry,vertices:[],faces:[],colors:[],colorKey:''};this.meshCache.set(mesh,cached);}
@@ -19,7 +24,7 @@
         for(let i=0;i<attr.count;i++){const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i),w=e[3]*x+e[7]*y+e[11]*z+e[15],v=vertices[i]||(vertices[i]={});v.x=((e[0]*x+e[4]*y+e[8]*z+e[12])/w+1)*this.width/2;v.y=(1-(e[1]*x+e[5]*y+e[9]*z+e[13])/w)*this.height/2;v.z=(e[2]*x+e[6]*y+e[10]*z+e[14])/w;v.w=w;}
         const index=geometry.index,triangles=index?index.count:attr.count;
         const material=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
-        const raw=material.color||new THREE.Color(1,1,1),colorKey=raw.getHexString()+(material.isMeshBasicMaterial?'':mesh.matrixWorld.elements.slice(0,12).join(','));if(colorKey!==cached.colorKey){cached.colors=[];cached.colorKey=colorKey;}
+        const raw=mesh.userData.gasArrow||mesh.userData.ventCloud?material.color.clone().convertLinearToSRGB():material.color||new THREE.Color(1,1,1),colorKey=raw.getHexString()+(material.isMeshBasicMaterial?'':mesh.matrixWorld.elements.slice(0,12).join(','));if(colorKey!==cached.colorKey){cached.colors=[];cached.colorKey=colorKey;}
         for(let i=0;i<triangles;i+=3){const ia=index?index.getX(i):i,ib=index?index.getX(i+1):i+1,ic=index?index.getX(i+2):i+2,a=vertices[ia],b=vertices[ib],c=vertices[ic];
           if(a.w<=0||b.w<=0||c.w<=0)continue;
           if(material.clippingPlanes?.length){const center=new THREE.Vector3().fromBufferAttribute(attr,ia).add(new THREE.Vector3().fromBufferAttribute(attr,ib)).add(new THREE.Vector3().fromBufferAttribute(attr,ic)).multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld);if(material.clippingPlanes.some(p=>p.distanceToPoint(center)<0))continue;}
@@ -29,7 +34,7 @@
             const v1=new THREE.Vector3().fromBufferAttribute(attr,ia),v2=new THREE.Vector3().fromBufferAttribute(attr,ib),v3=new THREE.Vector3().fromBufferAttribute(attr,ic),normal=(geometry.attributes.normal?new THREE.Vector3().fromBufferAttribute(geometry.attributes.normal,ia).add(new THREE.Vector3().fromBufferAttribute(geometry.attributes.normal,ib)).add(new THREE.Vector3().fromBufferAttribute(geometry.attributes.normal,ic)).normalize():v2.sub(v1).cross(v3.sub(v1)).normalize()).applyMatrix3(normalMatrix).normalize(),luminance=material.isMeshBasicMaterial?1:.34+.66*Math.max(0,normal.dot(light)),tint=raw.clone().multiplyScalar(luminance);
             color=cached.colors[i]=`rgb(${Math.round(tint.r*255)},${Math.round(tint.g*255)},${Math.round(tint.b*255)})`;
           }
-          const face=cached.faces[i]||(cached.faces[i]={a,b,c});face.z=(a.z+b.z+c.z)/3;face.layer=material.depthTest===false?mesh.renderOrder:0;face.color=color;face.opacity=material.transparent?material.opacity:1;faces.push(face);
+          const face=cached.faces[i]||(cached.faces[i]={a,b,c});face.z=(a.z+b.z+c.z)/3;face.layer=mesh.userData.gasArrow?10:material.depthTest===false?mesh.renderOrder:0;face.color=color;face.opacity=material.transparent?material.opacity:1;faces.push(face);
         }
       });
       faces.sort((a,b)=>a.layer-b.layer||b.z-a.z);const ctx=this.ctx;ctx.setTransform(this.ratio,0,0,this.ratio,0,0);ctx.clearRect(0,0,this.width,this.height);

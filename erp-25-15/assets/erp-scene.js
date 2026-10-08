@@ -2,7 +2,7 @@
   const V=(x,y,z)=>new THREE.Vector3(x,y,z),Y=ERP25Layout.y;
   class Plant {
     constructor(palette){
-      this.palette=palette;this.scene=new THREE.Scene();this.parts={};this.items=[];this.labels=[];this.gas=[];this.shells=[];this.bodyShells=[];this.shutters={};this.windows={};this.travel={};this.tubings=[];this.domainMemory={};this.lastRevision=-1;this.xrayOn=true;
+      this.palette=palette;this.scene=new THREE.Scene();this.parts={};this.items=[];this.labels=[];this.gas=[];this.shells=[];this.bodyShells=[];this.shutters={};this.windows={};this.travel={};this.tubings=[];this.domainMemory={};this.lastRevision=-1;this.xrayOn=true;this.ventClouds=[];
       const white=new THREE.Color(1,1,1);this.scene.add(new THREE.HemisphereLight(white,0x53606d,.78));const key=new THREE.DirectionalLight(white,.95);key.position.set(-3,8,5);key.castShadow=true;key.shadow.mapSize.set(2048,2048);Object.assign(key.shadow.camera,{left:-9,right:9,top:7,bottom:-7,near:.5,far:24});key.shadow.bias=-.00035;key.shadow.normalBias=.025;key.shadow.radius=2;this.scene.add(key);
       const fill=new THREE.DirectionalLight(0xdce8f2,.25);fill.position.set(5,4,-5);this.scene.add(fill);
       const standard=(color,metalness=.15,roughness=.42)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
@@ -197,6 +197,7 @@
       this.item('purge-'+k,k,'Purga de tramo regulado',V(L.purge,Y,z),g=>{const r=k==='B'?.07:.1014;this.connector(V(0,r,0),'y',g,.035);this.pipe(V(0,r,0),V(0,r+.40,0),.026,this.mat.metal,false,g);this.mesh(new THREE.SphereGeometry(.065,18,12),this.mat.metal,V(0,r+.22,0),g);this.mesh(new THREE.BoxGeometry(.13,.025,.033),this.mat.dark,V(.06,r+.28,0),g);},'Purga independiente sobre cañería regulada, antes del manómetro y del alivio en las ramas laterales.');
       this.item('relief-'+k,k,'Alivio Satesa · plano #34/#35',V(L.relief,Y,z),g=>{const r=k==='B'?.07:.1014;this.connector(V(0,r,0),'y',g,.04);this.pipe(V(0,r,0),V(0,r+.25,0),.03,this.mat.metal,true,g);this.mesh(new THREE.CylinderGeometry(.075,.075,.22,24),this.mat.metal,V(0,r+.36,0),g);this.pipe(V(0,r+.47,0),V(0,2.20,0),.035,this.mat.metal,true,g);this.ring(V(0,r+.27,0),.085,.011,this.mat.dark,'y',g);},'Alivio de proceso del plano; distinto de un QEV del pilotaje. Descarga individual: referencia 150 m³/h en cada lateral y 20 m³/h en arranque; capacidad variable con presión.');
       this.gasPath([V(L.relief,Y,z),V(L.relief,Y+2.20,z)],'vent-'+k,.021);
+      this.ventCloud(k,V(L.relief,Y+2.20,z));
     }
     branch(k){
       const L=ERP25Layout.branches[k],z=L.z,small=k==='B',r=small?.066:.10;
@@ -255,10 +256,21 @@
       const path=new THREE.CurvePath();for(let i=1;i<points.length;i++)if(points[i].distanceTo(points[i-1])>.001)path.add(new THREE.LineCurve3(points[i-1],points[i]));
       const core=this.mesh(new THREE.TubeGeometry(path,Math.max(1,Math.ceil(path.getLength()*4)),r,10,false),this.mat.gas.clone(),V(0,0,0));core.material.transparent=true;core.material.opacity=.50;core.material.depthWrite=false;core.renderOrder=8;
       const count=Math.max(1,Math.ceil(path.getLength()/.52)),particles=[];
-      const profile=[new THREE.Vector2(0,-.060),new THREE.Vector2(.010,-.060),new THREE.Vector2(.010,.012),new THREE.Vector2(.026,.012),new THREE.Vector2(0,.065)];
+      // Option A: larger, darker arrows; the gas band and pipe materials are unchanged.
+      const arrowRadius=Math.min(.044,r*1.10),arrowHalfLength=Math.min(.105,path.getLength()*.40);
+      const profile=[new THREE.Vector2(0,-arrowHalfLength),new THREE.Vector2(arrowRadius*.36,-arrowHalfLength),new THREE.Vector2(arrowRadius*.36,arrowHalfLength*.12),new THREE.Vector2(arrowRadius,arrowHalfLength*.12),new THREE.Vector2(0,arrowHalfLength)];
       const geo=new THREE.LatheGeometry(profile,12);
-      for(let i=0;i<count;i++){const m=this.mesh(geo,this.mat.gas.clone(),V(0,0,0));m.material.transparent=true;m.material.depthWrite=false;m.renderOrder=10;m.userData.gasArrow=true;m.visible=false;particles.push(m);}
-      this.gas.push({key,path,particles,core,phase:0,r});
+      for(let i=0;i<count;i++){const m=this.mesh(geo,this.mat.gas.clone(),V(0,0,0));m.material.transparent=true;m.material.depthWrite=false;m.material.toneMapped=false;m.renderOrder=10;m.userData.gasArrow=true;m.visible=false;particles.push(m);}
+      this.gas.push({key,path,particles,core,phase:0,r,arrowHalfLength});
+    }
+    ventCloud(key,origin){
+      const group=new THREE.Group(),puffs=[];group.position.copy(origin);group.visible=false;this.scene.add(group);
+      const geometry=new THREE.SphereGeometry(1,14,10);
+      for(let i=0;i<4;i++){const puff=new THREE.Group(),layers=[];group.add(puff);
+        for(const size of [1,1.23,1.45]){const material=new THREE.MeshBasicMaterial({color:new THREE.Color('#8096a3').convertSRGBToLinear(),transparent:true,opacity:0,depthWrite:false,toneMapped:false});const mesh=new THREE.Mesh(geometry,material);mesh.scale.setScalar(size);mesh.userData.ventCloud=true;puff.add(mesh);layers.push(mesh);}
+        puffs.push({group:puff,layers});
+      }
+      this.ventClouds.push({key,group,puffs,phase:0});
     }
     xray(on){this.xrayOn=on;for(const mesh of this.shells){mesh.material.transparent=on;mesh.material.opacity=on?.56:1;mesh.material.depthWrite=!on;}for(const g of this.gas){g.core.material.depthTest=true;for(const a of g.particles)a.material.depthTest=true;}}
     cutaway(on){this.cutawayOn=on;for(const mesh of this.bodyShells){mesh.material.transparent=false;mesh.material.opacity=1;mesh.material.depthWrite=true;mesh.updateWorldMatrix(true,false);const center=mesh.getWorldPosition(new THREE.Vector3());mesh.material.clippingPlanes=on?[new THREE.Plane(new THREE.Vector3(0,0,-1),center.z)]:[];mesh.material.side=on?THREE.DoubleSide:THREE.FrontSide;mesh.material.needsUpdate=true;}for(const o of Object.values(this.shutters))o.group.visible=on;}
@@ -283,7 +295,14 @@
         const isVent=set.key.startsWith('vent-'),intensity=isVent?Math.min(1,q/Math.max(1,m.branches[set.key.slice(5)].relief.qmax)):1;
         set.flow=q;set.pressure=p;set.source=source;const moving=q>(isVent?1e-6:1),high=p>Math.max(3,trainer.settings.a1*2),color=high?this.mat.high.color:this.mat.gas.color;set.core.visible=isVent?moving:p>.03;set.core.material.color.copy(color);set.core.material.opacity=isVent?.18+.32*intensity:moving?.50:.12;
         if(motion&&moving)set.phase=(set.phase+dt*(.22+.10*Math.sqrt(Math.min(q,3000)/500))/Math.max(.15,set.path.getLength()))%1;
-        set.particles.forEach((mesh,i)=>{mesh.visible=moving&&(isVent||p>.03);mesh.material.opacity=isVent?.45+.55*intensity:1;mesh.material.color.copy(color).multiplyScalar(.80);const u=(set.phase+(i+.5)/set.particles.length)%1;const safe=Math.min(.49,.075/Math.max(.16,set.path.getLength())),v=safe+(1-2*safe)*u;mesh.position.copy(set.path.getPoint(v));mesh.quaternion.setFromUnitVectors(V(0,1,0),set.path.getTangent(v).normalize());});
+        set.particles.forEach((mesh,i)=>{mesh.visible=moving&&(isVent||p>.03);mesh.material.opacity=isVent?.45+.55*intensity:1;mesh.material.color.set(high?'#974609':'#0b4f7b').convertSRGBToLinear();const u=(set.phase+(i+.5)/set.particles.length)%1;const safe=Math.min(.49,(set.arrowHalfLength+.006)/Math.max(.016,set.path.getLength())),v=safe+(1-2*safe)*u;mesh.position.copy(set.path.getPoint(v));mesh.quaternion.setFromUnitVectors(V(0,1,0),set.path.getTangent(v).normalize());});
+      }
+      for(const cloud of this.ventClouds){const relief=m.branches[cloud.key].relief,q=relief.q;cloud.group.visible=q>1e-6;if(!cloud.group.visible){cloud.phase=0;continue;}
+        const strength=.35+.65*Math.sqrt(Math.min(1,q/Math.max(1,relief.qmax)));if(motion)cloud.phase=(cloud.phase+dt*.24)%1;
+        cloud.puffs.forEach((puff,i)=>{const u=(cloud.phase+i/cloud.puffs.length)%1,r=.065+.13*u+.035*strength,fade=Math.sin(Math.PI*u);
+          puff.group.position.set(.045*Math.sin(i*2.4+u*3)*u,.07+.55*u,.035*Math.cos(i*1.7+u*2)*u);puff.group.scale.set(r*1.45,r*.80,r*1.15);
+          puff.layers.forEach((mesh,j)=>{mesh.material.opacity=fade*strength*[.18,.065,.028][j];});
+        });
       }
       if(this.parts['qev-A'])this.parts['qev-A'].group.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(m.qev.active?0x884400:0x000000);}});
       this.labels.find(l=>l.id==='in').text=`Entrada ${m.cfg.pin.toFixed(1)} bar(g)`;this.labels.find(l=>l.id==='out').text=`Salida ${m.p.toFixed(2)} bar(g)`;
