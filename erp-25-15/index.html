@@ -1544,7 +1544,7 @@ html>body{padding:0}</style>
     
     <label class="form-label">Cámara<select class="form-select" data-f="camera"><option value="iso">Perspectiva</option><option value="front">Frente</option><option value="top">Planta</option></select></label>
     <label class="form-label">Velocidad<select class="form-select" data-f="speed"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1">1×</option><option value="5" selected>5×</option><option value="15">15×</option></select></label>
-</div></header><div class="erp-workspace" data-f="workspace" data-expanded="false"><div class="erp-two-panels"><section class="erp-scene-panel" aria-label="Instalación 3D"><div class="erp-scene-controls" aria-label="Control del escenario junto al modelo"><div class="erp-scene-controls-row"><label class="form-label">Escenario<select class="form-select" data-f="scenario"></select></label><button class="btn" data-a="scenario" type="button" title="Iniciar o reiniciar el escenario seleccionado">▶ Iniciar</button><button class="btn" data-a="play" type="button">Pausar</button><button class="btn" data-a="step" type="button">+5 s</button></div><div data-f="scene-scenario-status" class="erp-scene-scenario-status sr-only" role="status" aria-live="polite"></div></div>  <div class="erp-header-readings" data-f="header-readings"></div><div class="erp-panel-tools"><button class="btn" data-a="equipment-summary" type="button" hidden="hidden">Equipos</button><button class="btn" data-a="expand" aria-pressed="false" type="button">Ampliar paneles</button><button class="btn" data-a="zoom-in" type="button" aria-label="Acercar vista 3D">+</button><button class="btn" data-a="zoom-out" type="button" aria-label="Alejar vista 3D">−</button><button class="btn" type="button" data-a="fit">Ajustar vista</button><button class="btn" type="button" data-a="top">Vista superior</button><button class="btn" type="button" data-a="side">Vista lateral</button><button class="btn" type="button" data-a="labels-toggle" aria-pressed="true">Etiquetas</button></div><div class="erp-stage cursor-interaction" data-f="stage">
+</div></header><div class="erp-workspace" data-f="workspace" data-expanded="false"><div class="erp-two-panels"><section class="erp-scene-panel" aria-label="Instalación 3D"><div class="erp-scene-controls" aria-label="Control del escenario junto al modelo"><div class="erp-scene-controls-row"><label class="form-label">Escenario<select class="form-select" data-f="scenario"></select></label><button class="btn" data-a="scenario" type="button" title="Iniciar o reiniciar el escenario seleccionado">▶ Iniciar</button><button class="btn" data-a="play" type="button">Pausar</button><button class="btn" data-a="step" type="button">+5 s</button></div><div data-f="scene-scenario-status" class="erp-scene-scenario-status sr-only" role="status" aria-live="polite"></div></div>  <div class="erp-header-readings" data-f="header-readings"></div><div class="erp-panel-tools"><button class="btn" data-a="equipment-summary" type="button" hidden="hidden">Equipos</button><button class="btn" data-a="expand" aria-pressed="false" type="button">Ampliar paneles</button><button class="btn" data-a="zoom-in" type="button" aria-label="Acercar vista 3D">+</button><button class="btn" data-a="zoom-out" type="button" aria-label="Alejar vista 3D">−</button><button class="btn" type="button" data-a="fit">Ajustar vista</button><button class="btn" type="button" data-a="top">Vista superior</button><button class="btn" type="button" data-a="side">Vista lateral</button><button class="btn" type="button" data-a="labels-toggle" aria-pressed="true">Equipos</button><button class="btn" type="button" data-a="totals-toggle" aria-pressed="true">Entrada / salida</button></div><div class="erp-stage cursor-interaction" data-f="stage">
     <canvas data-f="canvas" role="img" aria-label="Instalación 3D: dos ramas laterales con monitor, bloqueo y activo; rama central de arranque; partículas indican dirección del gas"></canvas>
     <svg class="erp-labels" data-f="labels" aria-hidden="true"></svg>
     <div data-f="error" role="alert" hidden></div>
@@ -1674,7 +1674,7 @@ html>body{padding:0}</style>
 
 <script data-erp-layout src="./assets/erp-layout.js"></script>
 
-<script data-erp-modes src="./assets/erp-modes.js"></script>
+<script data-erp-modes src="./assets/erp-modes.js?v=20261009-labels"></script>
 
 <script data-erp-scene src="./assets/erp-scene.js?v=20261008-visual-a"></script>
 
@@ -1682,7 +1682,7 @@ html>body{padding:0}</style>
 
 <script data-erp-curves src="./assets/erp-curves.js"></script>
 
-<script data-erp-ui src="./assets/erp-ui.js?v=20261008-visual-a"></script>
+<script data-erp-ui src="./assets/erp-ui.js?v=20261009-labels"></script>
 
 <script data-erp-curvesui src="./assets/erp-curvesui.js"></script>
 
@@ -2386,5 +2386,16 @@ html,body{margin:0!important;padding:0!important;max-width:none!important;width:
 #erp25-3d .erp-panel-tools{padding:1px 0!important;gap:4px!important}
 #erp25-3d .erp-panel-tools .btn{min-height:24px!important;height:24px!important;padding:1px 6px!important;font-size:11px!important;line-height:20px!important}
 #erp25-3d .erp-stage,#erp25-3d .erp-workspace[data-expanded="true"] .erp-stage{background:linear-gradient(160deg,#fafbfc 0%,#edf1f4 75%,#e3e9ee 100%)!important;box-shadow:inset 0 0 0 1px #c4cfd8}
+</style><style id="erp-rev35-controls">
+#erp25-3d .erp-topbar h3{min-width:0;flex:0 1 36%}
+#erp25-3d .erp-active-config{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#erp25-3d .erp-topbar .erp-main-controls{display:flex;flex:0 0 auto;min-width:0;width:auto!important;gap:6px!important}
+#erp25-3d .erp-topbar .erp-main-controls>.form-label{width:100px!important;min-width:0!important;max-width:100px;flex:0 0 100px}
+#erp25-3d .erp-topbar .erp-main-controls>.form-label:has([data-f="speed"]){width:64px!important;max-width:64px;flex-basis:64px}
+#erp25-3d .erp-main-controls select{width:100%!important;min-width:0!important}
+#erp25-3d [data-f="scenario"]{appearance:none;padding-right:26px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23d4e6f5' stroke-width='2'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-position:right 8px center!important;text-overflow:ellipsis;min-width:0}
+#erp25-3d .erp-panel-tools{flex-wrap:wrap}
+#erp25-3d [data-a="totals-toggle"][aria-pressed="true"]{color:#72c9ff!important;border-color:#3699d4!important}
+@media(max-width:850px){#erp25-3d .erp-topbar h3{flex-basis:100%}}
 </style></body>
 </html>

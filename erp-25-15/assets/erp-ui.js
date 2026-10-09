@@ -15,7 +15,7 @@
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.outputEncoding=THREE.sRGBEncoding;renderer.localClippingEnabled=true;if(renderer.shadowMap){renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;}renderer.setClearColor(palette.background,0);
   const camera=new THREE.PerspectiveCamera(38,1,.1,100),target=new THREE.Vector3(0,.65,0);
   let orbit={theta:.66,phi:1.08,radius:19.5},lastStamp=0,lastUI=0,running=!matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let labelsVisible=true,savedPlaybackSpeed=null;let faultDraft=false;const pointers=new Map();let lastDistance=0,dragged=false,lastNarrative='',selected='monitor-A';
+  let labelsVisible=true,totalsVisible=true,savedPlaybackSpeed=null;let faultDraft=false;const pointers=new Map();let lastDistance=0,dragged=false,lastNarrative='',selected='monitor-A';
   const fmt=(v,n=2)=>v.toLocaleString('es-AR',{minimumFractionDigits:n,maximumFractionDigits:n});
   function updateCamera(){const radius=orbit.radius*(f('stage').getBoundingClientRect().width<500?1.22:1);camera.position.set(target.x+radius*Math.sin(orbit.phi)*Math.sin(orbit.theta),target.y+radius*Math.cos(orbit.phi),target.z+radius*Math.sin(orbit.phi)*Math.cos(orbit.theta));camera.lookAt(target);camera.updateMatrixWorld();}
   function resize(){const rect=f('stage').getBoundingClientRect();renderer.setSize(rect.width,rect.height,false);camera.aspect=rect.width/rect.height;camera.fov=rect.width<450?50:38;camera.updateProjectionMatrix();updateCamera();renderLabels();}
@@ -37,57 +37,45 @@
   function choose(id){selected=id;if(root.erpCurves&&ERP25Curves.units.some(([unit])=>unit===id))root.erpCurves.select(id);f('component').value=id;plant.select(id);const part=plant.parts[id],kind=id.startsWith('PIT')?id:id.split('-')[0];f('detail').textContent=part.name.replace(/ · (?:plano |la instalación )?#.*$/,'');f('technical-detail').textContent=part.description||descriptions[kind]||'';renderLabels();}
   function project(point){return point.clone().project(camera);}
   const openingText=(k,kind)=>{const st=trainer.state(k);return !trainer.model.branches[k].enabled||!st.ssv?'N/C':fmt(100*st[kind],1)+' %';};
-  const labelBounds=new Map();
+  // Scenario 13 distinguishes delivery at the ERP boundary from downstream network drawdown.
+  const outletFlow=()=>trainer.mode==='rupture'?Math.max(0,trainer.model.qin-trainer.model.qr):trainer.model.qd;
   function renderLabels(){
     const rect=f('stage').getBoundingClientRect(),w=rect.width,h=rect.height;if(!w)return;
     const labels=[
-      {id:'total-in',priority:-6,title:'ENTRADA',value:fmt(trainer.model.cfg.pin,1)+' bar',point:new THREE.Vector3(-6.3,ERP25Layout.y,0)},
-      {id:'total-out',priority:-6,title:'SALIDA',value:fmt(trainer.model.p,2)+' bar · '+fmt(trainer.model.qd,0)+' Nm³/h',point:new THREE.Vector3(6.3,ERP25Layout.y,0)}];
+      {id:'total-in',priority:-6,text:'ENT '+fmt(trainer.model.cfg.pin,1)+' bar · '+fmt(trainer.model.qin,0)+' Nm³/h',point:new THREE.Vector3(-6.3,ERP25Layout.y+.45,0)},
+      {id:'total-out',priority:-6,text:'SAL '+fmt(trainer.model.p,2)+' bar · '+fmt(outletFlow(),0)+' Nm³/h',point:new THREE.Vector3(6.3,ERP25Layout.y+.45,0)}];
     const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;');
     f('branch-readings').innerHTML=['A','C','B'].map(k=>{const st=trainer.state(k),name=k==='A'?'R1 · principal':k==='C'?'R2 · reserva':'AR · arranque';return `<div class="erp-reading"><strong>${name}</strong><span><b>${fmt(trainer.model.p)}</b> bar(g) · <b>${fmt(st.q,1)}</b> Nm³/h</span><small>${k==='B'?'Estado: '+openingText(k,'active'):'M '+openingText(k,'monitor')+' · A '+openingText(k,'active')}</small></div>`;}).join('');
     const faultText=f('header-readings').dataset.faultText||'Sin fallas activas';
-    f('header-readings').innerHTML=`<div><small>ENTRADA TOTAL</small><b>${fmt(trainer.model.cfg.pin)} <small>bar(g)</small></b><span>${fmt(trainer.model.qin,1)} Nm³/h</span></div><div><small>SALIDA A RED</small><b>${fmt(trainer.model.p)} <small>bar(g)</small></b><span>${fmt(trainer.model.qd,1)} Nm³/h</span></div><div><small>ALIVIO</small><b>${fmt(trainer.model.qr,1)} <small>Nm³/h</small></b><span>R1 ${fmt(trainer.model.branches.A.relief.q,0)} · R2 ${fmt(trainer.model.branches.C.relief.q,0)} · AR ${fmt(trainer.model.branches.B.relief.q,0)}</span></div><div class="erp-kpi-state"><small>ESTADO GENERAL</small><b>${f('header-readings').dataset.faults>0?'Atención':'Normal'}</b><span title="${esc(faultText)}">${esc(faultText)}</span></div>`;
-    for(const k of ['A','C','B']){const L=ERP25Layout.branches[k],name=k==='A'?'R1':k==='C'?'R2':'Arranque';
-      for(const kind of k==='B'?['active']:['monitor','active']){
+    f('header-readings').innerHTML=`<div><small>ENTRADA TOTAL</small><b>${fmt(trainer.model.cfg.pin)} <small>bar(g)</small></b><span>${fmt(trainer.model.qin,1)} Nm³/h</span></div><div><small>SALIDA A RED</small><b>${fmt(trainer.model.p)} <small>bar(g)</small></b><span>${fmt(outletFlow(),1)} Nm³/h</span></div><div><small>ALIVIO</small><b>${fmt(trainer.model.qr,1)} <small>Nm³/h</small></b><span>R1 ${fmt(trainer.model.branches.A.relief.q,0)} · R2 ${fmt(trainer.model.branches.C.relief.q,0)} · AR ${fmt(trainer.model.branches.B.relief.q,0)}</span></div><div class="erp-kpi-state"><small>ESTADO GENERAL</small><b>${f('header-readings').dataset.faults>0?'Atención':'Normal'}</b><span title="${esc(faultText)}">${esc(faultText)}</span></div>`;
+    for(const k of ['A','C','B']){const L=ERP25Layout.branches[k],name=k==='A'?'R1':k==='C'?'R2':'AR';
+      for(const kind of k==='B'?['ssv','active']:['monitor','active']){
         const id=kind+'-'+k,failmode=kind==='active'&&k!=='B'?'FO':'FC';
-        labels.push({id,priority:-4,title:name+' · '+(kind==='monitor'?'Monitor':k==='B'?'Regulador':'Activo'),value:openingText(k,kind)+' · '+failmode,point:plant.parts[id].group.position.clone().add(new THREE.Vector3(0,.55,0))});
+        const text=kind==='ssv'?name+' · Bloqueo '+(trainer.state(k).ssv?'abierto':'cerrado'):name+' · '+(kind==='monitor'?'M':kind==='active'&&k!=='B'?'A':'Reg.')+' '+openingText(k,kind)+' · '+failmode;
+        labels.push({id,priority:-4,text,point:new THREE.Vector3(L[kind],ERP25Layout.y+1,L.z)});
       }
     }
-    if(trainer.model.qev.active||trainer.model.qev.acted)labels.push({id:'qev-A',priority:-5,title:'R1 · QEV',value:trainer.model.qev.active?'Descarga cámara':'Actuó',point:plant.parts['qev-A'].group.position.clone()});
-    if(!labelsVisible){f('labels').innerHTML='';return;}
-    const placed=[],cards=[],guides=[],leaders=[],obstacles=[],tw=Math.min(146,w-16),th=34,gap=6;
-    const overlap=(a,b,pad=0)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w+pad)-Math.max(a.x,b.x-pad))*Math.max(0,Math.min(a.y+a.h,b.y+b.h+pad)-Math.max(a.y,b.y-pad));
-    const lineHits=(a,b,box)=>{let lo=0,hi=1;for(const [axis,size] of [['x','w'],['y','h']]){const d=b[axis]-a[axis];if(Math.abs(d)<.001){if(a[axis]<box[axis]||a[axis]>box[axis]+box[size])return false;}else{let x=(box[axis]-a[axis])/d,y=(box[axis]+box[size]-a[axis])/d;if(x>y)[x,y]=[y,x];lo=Math.max(lo,x);hi=Math.min(hi,y);if(lo>hi)return false;}}return hi>0&&lo<1;};
-    plant.scene.updateMatrixWorld(true);
-    // Project fixed equipment envelopes; neither the equipment nor the camera is moved.
-    for(const [id,part] of Object.entries(plant.parts)){
-      if(!/^(filter|monitor|active|ssv|in|out|gauge|relief|qev)-[ABC]$/.test(id))continue;
-      if(!labelBounds.has(id)){const box=new THREE.Box3().setFromObject(part.group);if(id.startsWith('relief-'))box.max.y=part.group.position.y+.65;labelBounds.set(id,box);}
-      const box=labelBounds.get(id),points=[];
-      for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const p=project(new THREE.Vector3(x,y,z));if(p.z>=-1&&p.z<=1)points.push({x:(p.x+1)*w/2,y:(1-p.y)*h/2});}
-      if(!points.length)continue;const xs=points.map(p=>p.x),ys=points.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys);obstacles.push({x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y});
+    if(trainer.model.qev.active||trainer.model.qev.acted)labels.push({id:'qev-state',priority:-5,text:trainer.model.qev.active?'QEV · descarga cámara':'QEV · actuó',point:new THREE.Vector3(ERP25Layout.branches.A.monitor,ERP25Layout.y+1.65,ERP25Layout.branches.A.z)});
+    const visible=labels.filter(l=>l.id.startsWith('total-')?totalsVisible:labelsVisible);
+    const placed=[],out=[];
+    // Keep the previous thin, single-line style, directly above each equipment.
+    // Vertical stacking only: no diagonal leaders or displaced perimeter cards.
+    const projected=visible.map(label=>{const p=project(label.point);return {...label,p,px:(p.x+1)*w/2,py:(1-p.y)*h/2};}).filter(l=>l.p.z>=-1&&l.p.z<=1&&l.px>=-30&&l.px<=w+30&&l.py>=-30&&l.py<=h+30).sort((a,b)=>a.py-b.py||a.px-b.px);
+    const groups=[];
+    for(const label of projected){const key=/^(monitor|active|ssv)-/.test(label.id)?label.id.slice(-1):label.id;let group=groups.find(g=>g.key===key);if(!group){group={key,labels:[]};groups.push(group);}group.labels.push(label);}
+    groups.sort((a,b)=>Math.min(...a.labels.map(l=>l.py))-Math.min(...b.labels.map(l=>l.py)));
+    for(const group of groups){group.labels.sort((a,b)=>a.px-b.px);
+      const widths=group.labels.map(l=>Math.min((w-20)/group.labels.length-4,l.text.length*6.1+16));
+      const total=widths.reduce((a,b)=>a+b,0)+4*(widths.length-1),center=group.labels.reduce((v,l)=>v+l.px,0)/group.labels.length;
+      const gx=Math.max(8,Math.min(w-total-8,center-total/2));let y=Math.max(5,Math.min(h-25,Math.min(...group.labels.map(l=>l.py))-15));
+      const overlaps=yy=>placed.some(b=>gx<b.x+b.w+4&&gx+total+4>b.x&&yy<b.y+b.h+3&&yy+23>b.y);
+      if(overlaps(y)){const original=y;let found=false;for(const offset of [-23,23,-46,46,-69,69]){const yy=original+offset;if(yy>=5&&yy+20<=h-5&&!overlaps(yy)){y=yy;found=true;break;}}if(!found){for(let yy=5;yy<h-25;yy+=23)if(!overlaps(yy)){y=yy;break;}}}
+      placed.push({x:gx,y,w:total,h:20});let x=gx;
+      group.labels.forEach((label,i)=>{const tw=widths[i],opacity=label.id.startsWith('total-')?.8:.4;
+        out.push(`<g data-equipment-label="${label.id}" data-anchor-x="${label.px.toFixed(1)}" data-anchor-y="${label.py.toFixed(1)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw.toFixed(1)}" height="20" rx="8" fill="#142f40" fill-opacity="${opacity}"/><text x="${(x+tw/2).toFixed(1)}" y="${(y+14).toFixed(1)}" text-anchor="middle" style="fill:#fff!important;font-size:11px;font-weight:600;paint-order:stroke;stroke:#142f40;stroke-width:1.3px;stroke-opacity:.65">${esc(label.text)}</text></g>`);x+=tw+4;
+      });
     }
-    labels.sort((x,y)=>x.priority-y.priority);
-    const centreY=(1-project(new THREE.Vector3(0,ERP25Layout.y+.55,0)).y)*h/2;
-    for(const label of labels){const p=project(label.point);if(p.z>1||p.z< -1)continue;const px=(p.x+1)*w/2,py=(1-p.y)*h/2;
-      if(px< -30||px>w+30||py< -30||py>h+30)continue;
-      let best=null,bestScore=Infinity;
-      const consider=(dx,dy)=>{const box={x:Math.max(8,Math.min(w-tw-8,px+dx-tw/2)),y:Math.max(8,Math.min(h-th-8,py+dy-th/2)),w:tw,h:th};
-        if(placed.some(b=>overlap(box,b,gap)>0))return;
-        const cx=box.x+tw/2,cy=box.y+th/2,covered=obstacles.reduce((sum,b)=>sum+overlap(box,b,3),0),distance=Math.hypot(cx-px,cy-py);
-        const end={x:Math.max(box.x+6,Math.min(box.x+tw-6,px)),y:py<box.y?box.y:py>box.y+th?box.y+th:py},crossings=placed.filter(b=>lineHits({x:px,y:py},end,b)).length+leaders.filter(l=>lineHits(l.a,l.b,box)).length;
-        const side=/^(active|monitor)-/.test(label.id)&&((cy-py)*(py<centreY?-1:1)<0)?400:0;
-        const score=covered*12+crossings*5000+distance+side;if(score<bestScore){best=box;bestScore=score;}
-      };
-      for(const dy of [-44,44,-84,84,-124,124,-164,164,-204,204])for(const dx of [0,-48,48,-96,96,-148,148,-200,200])consider(dx,dy);
-      if(!best)for(let y=8;y<h-th;y+=20)for(let x=8;x<w-tw;x+=28)consider(x+tw/2-px,y+th/2-py);
-      if(!best)continue;
-      placed.push(best);const x=best.x+tw/2,y=best.y,ex=Math.max(best.x+6,Math.min(best.x+tw-6,px)),ey=py<y?y:py>y+th?y+th:Math.max(y+5,Math.min(y+th-5,py));
-      guides.push(`<path d="M ${px.toFixed(1)} ${py.toFixed(1)} L ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" style="stroke:#54758c;stroke-width:.7;opacity:.65"/>`);
-      leaders.push({a:{x:px,y:py},b:{x:ex,y:ey}});
-      cards.push(`<g data-equipment-label="${label.id}" data-anchor-x="${px.toFixed(1)}" data-anchor-y="${py.toFixed(1)}"><rect x="${best.x.toFixed(1)}" y="${y.toFixed(1)}" width="${tw}" height="${th}" rx="7" fill="#142f40" fill-opacity="0.8"/><text x="${x.toFixed(1)}" y="${(y+13).toFixed(1)}" text-anchor="middle" style="fill:#fff!important;font-size:10.5px;font-weight:600;stroke:none">${esc(label.title)}<tspan x="${x.toFixed(1)}" dy="14" style="font-weight:500">${esc(label.value)}</tspan></text></g>`);
-    }
-    f('labels').setAttribute('viewBox',`0 0 ${w} ${h}`);f('labels').innerHTML=guides.join('')+cards.join('');
+    f('labels').setAttribute('viewBox',`0 0 ${w} ${h}`);f('labels').innerHTML=out.join('');
   }
   a('equipment-summary').addEventListener('click',()=>{f('workspace').dataset.expanded='false';a('expand').textContent='Ampliar paneles';a('expand').setAttribute('aria-pressed','false');f('equipment-summary').open=true;f('equipment-summary').scrollIntoView({behavior:'smooth',block:'start'});});
   function narrative(){const m=trainer.model;
@@ -110,7 +98,7 @@
     const pending=trainer.steps.filter((s,i)=>s.act&&!trainer.applied.has(i));
     const currentName=trainer.mode==='custom'?'Combinación manual':trainer.name;const pendingSelection=f('scenario').value&&f('scenario').value!==trainer.mode;f('scene-scenario-status').textContent=(running?'En curso: ':'Pausado: ')+currentName+(pendingSelection?' · Selección pendiente: pulsá Iniciar.':'');f('scene-scenario-status').setAttribute('title',f('scene-scenario-status').textContent);
     f('active-config').textContent=(running?'● En curso':'Ⅱ Pausado')+' · Entrada '+fmt(m.cfg.pin,1)+' bar · Demanda '+fmt(m.cfg.demand,0)+' Nm³/h · '+(faults.length?faults.length+' fallas / restricciones':'Sin fallas activas')+' · t '+fmt(m.t,1)+' s'+(pendingSelection?' · Selección pendiente: Iniciar':'');f('active-config').title=currentName+(faults.length?' · '+faults.join(' · '):'')+(pending.length?' · Cambio a t='+pending[0].at+' s':'');
-f('pressure').textContent=`Salida ${fmt(m.p)} bar(g)`;f('flow').textContent=`Aporte ${fmt(m.qin,0)} · red ${fmt(m.qd,0)} · alivio ${fmt(m.qr,0)} Nm³/h`;f('time').textContent=`t ${fmt(m.t,1)} s`;
+f('pressure').textContent=`Salida ${fmt(m.p)} bar(g)`;f('flow').textContent=`Aporte ${fmt(m.qin,0)} · red ${fmt(outletFlow(),0)} · alivio ${fmt(m.qr,0)} Nm³/h`;f('time').textContent=`t ${fmt(m.t,1)} s`;
     if(plant.parts[selected]?.key){const k=plant.parts[selected].key,st=trainer.state(k),kind=selected.split('-')[0];let stateText='';if(kind==='active')stateText=`Apertura ${openingText(k,'active')}`;if(kind==='monitor')stateText=`Apertura ${openingText(k,'monitor')}`;if(kind==='relief'){const r=trainer.model.branches[k].relief;stateText=`${fmt(r.opening*100,0)} % · ${fmt(r.q,1)} m³/h · capacidad a esta presión ${fmt(r.qmax,1)} m³/h`;}if(kind==='ssv')stateText=st.ssv?'ABIERTA':'CERRADA';if(kind==='in'||kind==='out')stateText=(kind==='in'?st.inlet:st.outlet)?'ABIERTA':'CERRADA';const domains=plant.domainMemory[k]||[],cut=domains.find(d=>d.stop===selected);f('detail').textContent=plant.parts[selected].name+' · '+stateText+(cut?' · Gas llega hasta este obturador, '+fmt(cut.pressure)+' bar(g) estimados.':'');f('technical-detail').textContent=kind==='qev'?'QEV: '+(m.qev.active?'descargando cámara':m.qev.acted?'actuó; ahora cerrado':'en espera')+'. Umbral didáctico '+fmt(m.qev.sp)+' bar; no rearma el bloqueo.':plant.parts[selected].description||descriptions[kind]||'';}
     const text=narrative();if(text!==lastNarrative){lastNarrative=text;f('narrative').textContent=text;}
     f('states').innerHTML=['A','C','B'].map(k=>{const st=trainer.state(k);return `<tr><td>${k==='A'?'Rama 1':k==='C'?'Rama 2':'Arranque'}</td><td>${st.inlet?'Abierta':'Cerrada'} / ${st.outlet?'Abierta':'Cerrada'}</td><td>${st.ssv?'Abierta':'Cerrada'}${st.latched?' · enclavada':''}</td><td>${k==='B'?'—':openingText(k,'monitor')} / ${openingText(k,'active')}</td><td class="text-end tabular-nums">${fmt(st.q,0)} Nm³/h</td></tr>`;}).join('');
@@ -133,6 +121,7 @@ f('pressure').textContent=`Salida ${fmt(m.p)} bar(g)`;f('flow').textContent=`Apo
   f('xray').addEventListener('change',()=>plant.xray(f('xray').checked));f('component').addEventListener('change',()=>choose(f('component').value));
 
   a('labels-toggle').addEventListener('click',()=>{labelsVisible=!labelsVisible;a('labels-toggle').setAttribute('aria-pressed',String(labelsVisible));renderLabels();});
+  a('totals-toggle').addEventListener('click',()=>{totalsVisible=!totalsVisible;a('totals-toggle').setAttribute('aria-pressed',String(totalsVisible));renderLabels();});
   a('fit').addEventListener('click',()=>a('overall').click());
   for(const [key,value] of [['top','top'],['side','front']])a(key).addEventListener('click',()=>{f('camera').value=value;f('camera').dispatchEvent(new Event('change'));});
   const settingInputs=[...root.querySelectorAll('[data-sp]')];
