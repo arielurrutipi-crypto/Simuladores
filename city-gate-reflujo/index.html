@@ -4015,16 +4015,20 @@ return Plotly;
 </script><script>
 // Keep the process model and meter/RTU illustration usable without WebGL.
 (()=>{
- let gl=null;try{const c=document.createElement('canvas');gl=c.getContext('webgl2')||c.getContext('webgl');if(gl)gl.getExtension('WEBGL_lose_context')?.loseContext();}catch(e){}
- if(gl)return;
- window.cityGateNoWebGL=true;
+ const native=window.Plotly;
  const ready=()=>Promise.resolve();
- window.Plotly={
-  newPlot(el,data,layout){el.data=data;el._fullLayout=layout;el.style.background='#f3f7fa';const note=document.createElement('div');note.setAttribute('role','note');note.textContent='Este navegador no admite WebGL para la vista 3D. El cálculo, los eventos y el esquema medidor–RTU siguen disponibles.';note.style.cssText='position:absolute;top:110px;left:25%;right:35%;padding:18px;background:#fff;border:1px solid #c8dbe5;border-radius:9px;font:13px/1.5 Arial;color:#365d73;';el.appendChild(note);const png=document.getElementById('savePNG');if(png){png.disabled=true;png.title='La exportación de la vista 3D requiere WebGL.';}return ready();},
+ const adapter={
+  newPlot(el,data,layout){window.cityGateNoWebGL=true;document.querySelectorAll('.no-webgl').forEach(n=>n.remove());el.innerHTML='';el.data=data;el._fullLayout=layout;el.style.background='#f3f7fa';const note=document.createElement('div');note.setAttribute('role','note');note.textContent='Este navegador no admite WebGL para la vista 3D. El cálculo, los eventos y el esquema medidor–RTU siguen disponibles.';note.style.cssText='position:absolute;top:110px;left:25%;right:35%;padding:18px;background:#fff;border:1px solid #c8dbe5;border-radius:9px;font:13px/1.5 Arial;color:#365d73;';el.appendChild(note);const png=document.getElementById('savePNG');if(png){png.disabled=true;png.title='La exportación de la vista 3D requiere WebGL.';}return ready();},
   restyle:ready,relayout:ready,update:ready,
   addTraces(el,traces){el.data.push(...traces);return ready();},
   downloadImage:ready,Plots:{resize:()=>{}}
  };
+ let gl=null;try{const c=document.createElement('canvas');gl=c.getContext('webgl2')||c.getContext('webgl');}catch(e){}
+ if(!gl){window.Plotly=adapter;return;}
+ // Some browsers expose a context but lack the extensions required by Plotly.
+ window.Plotly={...native,newPlot(...args){return native.newPlot(...args).then(result=>{
+  if(document.querySelector('.no-webgl')){native.purge(args[0]);window.Plotly=adapter;return adapter.newPlot(...args);}return result;
+ }).catch(error=>{if(document.querySelector('.no-webgl')){native.purge(args[0]);window.Plotly=adapter;return adapter.newPlot(...args);}throw error;});}};
 })();
 
 </script><script>
