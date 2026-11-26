@@ -210,19 +210,26 @@ function screenPoint(point,w,h){
 function projectedArrows(w,h){
  const layer=$('arrows3d');layer.setAttribute('viewBox','0 0 '+w+' '+h);
  if(!flowVisible||(!playing&&!resuming)||angle===target){layer.innerHTML='';return}
- const out=[];
+ const out=[],traces=[];
+ function fluidTrace(points,color){
+  const xy=points.map(p=>screenPoint(p,w,h).map(v=>v.toFixed(2)).join(',')).join(' ');
+  const width=Math.min(3,cam.sx*w*.82);
+  traces.push('<polyline points="'+xy+'" stroke="'+color+'" stroke-width="'+width+'" fill="none"/>')
+ }
  const arrowScale=Math.min(1,cam.sx*w/2*2.15*.65);
  function arrow(a,b){let [x,y]=screenPoint(a,w,h),[u,v]=screenPoint(b,w,h);if(Math.hypot(u-x,v-y)<1.4||x<3||y<4||x>w-3||y>h-4)return;
  const t=Math.atan2(v-y,u-x)*180/Math.PI;out.push('<path d="M-2.1 -.78 L0 0 L-2.1 .78" transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+') rotate('+t.toFixed(1)+') scale('+arrowScale+')"/>')}
- for(const [name,r] of Object.entries(routes)){if(!name.startsWith('oil')&&!circuitVisible)continue;const k=role(name);if(!k)continue;const n=Math.max(1,Math.ceil(r.total/180)),dir=Math.sign(k);
+ for(const [name,r] of Object.entries(routes)){if(!name.startsWith('oil')&&!circuitVisible)continue;const k=role(name);if(!k)continue;
+ fluidTrace(r.pts,name.startsWith('oil')?'#ffb24d':'#53e1dd');
+ const n=Math.max(1,Math.ceil(r.total/180)),dir=Math.sign(k);
  for(let j=0;j<n;j++){const f=((j+.32)/n+dir*flowDistance/r.total)%1,ff=(f+1)%1,step=dir*5/r.total;if(ff+step>0&&ff+step<1)arrow(routePoint(name,ff),routePoint(name,ff+step))}}
  if(cut&&scenario!==3)for(const side of ['left','right'])for(const half of ['L','R']){
  const part=side+half,sgn=(pressureSide(part)?1:-1)*(half==='L'?1:-1);
  const p=extra('inside:'+part+':0').slice(0,3);arrow(p,[p[0]+sgn*9,p[1],p[2]])}
- if(cut&&scenario===3&&filling()&&aux){arrow([146,-28,222],[146,-28,235])}
+ if(cut&&scenario===3&&filling()&&aux){fluidTrace([[146,-28,222],[146,-28,235]],'#ffb24d');arrow([146,-28,222],[146,-28,235])}
  if(cut&&scenario===3&&!filling()){const p=198+13*Math.tan((angle-45)*rad),dir=target>angle?1:-1;
  for(const x of [(165+p-4)/2,(232+p+4)/2])arrow([x,-21,153],[x+dir*8,-21,153])}
- layer.innerHTML=out.join('')
+ layer.innerHTML=traces.join('')+out.join('')
 }
 // A functional section, with the power port and return port selected by the direction of travel.
 function flowDiagram(){
@@ -237,6 +244,7 @@ function flowDiagram(){
  function path(points,kind='flow'){
  const d=points.map(p=>p.join(',')).join(' ');svg+='<polyline points="'+d+'" fill="none" stroke="'+(kind==='sense'?fluid:line)+'" stroke-width="2.2" '+(kind==='sense'?'stroke-dasharray="4 4"':'')+'/>';
  if(!active||kind==='sense'||oil&&(kind==='suction'?!filling():filling()))return;
+ svg+='<polyline points="'+d+'" fill="none" stroke="'+fluid+'" stroke-width="1.2"/>';
  for(let i=1;i<points.length;i++){
  const [x,y]=points[i-1],[u,v]=points[i],len=Math.hypot(u-x,v-y);if(len<20)continue;
  const count=Math.max(1,Math.floor(len/100)),a=Math.atan2(v-y,u-x)*180/Math.PI;
